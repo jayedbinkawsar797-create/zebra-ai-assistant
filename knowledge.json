@@ -1,0 +1,54 @@
+{
+  "company_name": "Zebra Golf Cart",
+  "website": "zebragolfcart.com",
+  "phone": "(954) 820-4220",
+  "showroom_locations": ["Fort Lauderdale, FL", "Scottsdale, AZ", "Atlanta, GA"],
+  "models": {
+    "Breeze 4L": {
+      "price": "$14,999",
+      "capacity": "4-seater forward-facing",
+      "battery": "51.2V 150Ah Lithium, 5KW motor",
+      "range": "Up to 80 miles",
+      "speed": "30 MPH top speed"
+    },
+    "Breeze 4L Pro": {
+      "price": "$15,999",
+      "capacity": "4-seater forward-facing",
+      "battery": "51.2V 230Ah Lithium, 5KW motor",
+      "range": "Up to 100 miles",
+      "speed": "30 MPH top speed"
+    },
+    "Terrain 6": {
+      "price": "$17,999",
+      "capacity": "6-seater",
+      "battery": "51.2V 230Ah Lithium, 5KW motor",
+      "range": "Up to 80 miles",
+      "speed": "30 MPH top speed"
+    },
+    "Terrain 6 Pro": {
+      "price": "$19,999",
+      "capacity": "6-seater",
+      "battery": "73.6V 205Ah high-output Lithium, 7.5KW motor",
+      "range": "Up to 100 miles",
+      "speed": "30 MPH top speed"
+    }
+  },
+  "standard_features": [
+    "4-hour fast charge (plugs into standard 110V household outlet)",
+    "Integrated solar roof (trickle charges while parked in sun)",
+    "13-inch smart touchscreen with wireless Apple CarPlay and Android Auto",
+    "4K backup camera",
+    "Rust-proof aluminum chassis",
+    "4-wheel hydraulic disc brakes",
+    "Carbon fiber dash & diamond-stitched seats"
+  ],
+  "street_legal_lsv_rules": [
+    "Registered with 17-digit VIN",
+    "DOT-approved windshield with wiper",
+    "DOT seat belts, headlights, and turn signals",
+    "Legal to drive on public roads with speed limits up to 35 MPH"
+  ],
+  "warranty": "5-year battery warranty, 1-year bumper-to-bumper frame and components",
+  "financing": "We offer DealerDirect financing. Monthly payments available with approved credit.",
+  "media_links_template": "Use direct Google Drive CDN links: https://lh3.googleusercontent.com/d/[FILE_ID]"
+}
