@@ -9,34 +9,38 @@
       "capacity": "4-seater forward-facing",
       "battery": "51.2V 150Ah Lithium, 5KW motor",
       "range": "Up to 80 miles",
-      "speed": "30 MPH top speed"
+      "speed": "30 MPH top speed",
+      "image_url": "https://lh3.googleusercontent.com/d/1jPwh-xxgn5LwMkUMJuCiStNtzUVI8VYr"
     },
     "Breeze 4L Pro": {
       "price": "$15,999",
       "capacity": "4-seater forward-facing",
       "battery": "51.2V 230Ah Lithium, 5KW motor",
       "range": "Up to 100 miles",
-      "speed": "30 MPH top speed"
+      "speed": "30 MPH top speed",
+      "image_url": "https://lh3.googleusercontent.com/d/1Osc2LHngTn8wE7xl058gio0kJERf73gy"
     },
     "Terrain 6": {
       "price": "$17,999",
       "capacity": "6-seater",
       "battery": "51.2V 230Ah Lithium, 5KW motor",
       "range": "Up to 80 miles",
-      "speed": "30 MPH top speed"
+      "speed": "30 MPH top speed",
+      "image_url": "https://lh3.googleusercontent.com/d/1HVJvUFeqCVYjEL0MrGeO6F9gHXWGGBcd"
     },
     "Terrain 6 Pro": {
       "price": "$19,999",
       "capacity": "6-seater",
       "battery": "73.6V 205Ah high-output Lithium, 7.5KW motor",
       "range": "Up to 100 miles",
-      "speed": "30 MPH top speed"
+      "speed": "30 MPH top speed",
+      "image_url": "https://lh3.googleusercontent.com/d/1LOVK18guWygQ26C512B3JUwbmkAgNdzc"
     }
   },
   "standard_features": [
     "4-hour fast charge (plugs into standard 110V household outlet)",
     "Integrated solar roof (trickle charges while parked in sun)",
-    "13-inch smart touchscreen with wireless Apple CarPlay and Android Auto",
+    "13-inch smart touchscreen with wireless Apple CarPlay and Android Auto (Image: https://lh3.googleusercontent.com/d/1isnGzUvuqBgj9ofXdOqXWN68XkzMZFYj)",
     "4K backup camera",
     "Rust-proof aluminum chassis",
     "4-wheel hydraulic disc brakes",
@@ -49,6 +53,5 @@
     "Legal to drive on public roads with speed limits up to 35 MPH"
   ],
   "warranty": "5-year battery warranty, 1-year bumper-to-bumper frame and components",
-  "financing": "We offer DealerDirect financing. Monthly payments available with approved credit.",
-  "media_links_template": "Use direct Google Drive CDN links: https://lh3.googleusercontent.com/d/[FILE_ID]"
+  "financing": "We offer DealerDirect financing. Monthly payments available with approved credit."
 }
