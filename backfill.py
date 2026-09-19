@@ -15,7 +15,6 @@ async def fetch_and_store_history():
     database.init_db()
     
     url = "https://api.openphone.com/v1/messages"
-    # Using the standard OpenPhone Auth header
     headers = {
         "Authorization": f"{QUO_API_KEY}",
         "Content-Type": "application/json"
@@ -23,76 +22,19 @@ async def fetch_and_store_history():
     
     all_messages_to_insert = []
     page_token = None
-    total_fetched = 0
-    reached_march = False
     
     async with httpx.AsyncClient() as client:
-        while not reached_march:
-            query = "?maxResults=100"
-            if page_token:
-                query += f"&pageToken={page_token}"
-                
-            print(f"📡 Fetching a batch of 100 messages from Quo...")
-            try:
-                response = await client.get(f"{url}{query}", headers=headers, timeout=30.0)
-                response.raise_for_status()
-                data = response.json()
-            except Exception as e:
-                # If Authorization without Bearer fails, fallback to Bearer
-                if getattr(e, "response", None) and e.response.status_code == 401:
-                    headers["Authorization"] = f"Bearer {QUO_API_KEY}"
-                    response = await client.get(f"{url}{query}", headers=headers, timeout=30.0)
-                    response.raise_for_status()
-                    data = response.json()
-                else:
-                    print(f"❌ Error fetching from Quo API: {e}")
-                    break
-                
-            messages = data.get("data", [])
-            if not messages:
-                break
-                
-            for msg in messages:
-                created_at = msg.get("createdAt")
-                if created_at and created_at < STOP_DATE_STR:
-                    reached_march = True
-                    break
-                    
-                all_messages_to_insert.append(msg)
-                
-            total_fetched += len(messages)
-            page_token = data.get("nextPageToken")
-            
-            if not page_token:
-                break
-                
-        print(f"📦 Total messages downloaded since March: {len(all_messages_to_insert)}")
+        query = "?maxResults=100"
+        print(f"📡 Fetching a batch of 100 messages from Quo...")
+        response = await client.get(f"{url}{query}", headers=headers, timeout=30.0)
         
-        all_messages_to_insert.reverse()
-        
-        inserted = 0
-        for msg in all_messages_to_insert:
-            direction = msg.get("direction")
-            content = msg.get("content", "")
+        if response.status_code != 200:
+            print(f"❌ Error fetching from Quo API! Status: {response.status_code}")
+            print(f"❌ Exact Quo Error Message: {response.text}")
+            return
             
-            if not content:
-                continue
-                
-            if direction == "incoming":
-                role = "user"
-                phone = msg.get("from")
-            else:
-                role = "assistant"
-                to_list = msg.get("to", [])
-                if not to_list:
-                    continue
-                phone = to_list[0]
-                
-            if phone:
-                database.save_message(phone, role, content)
-                inserted += 1
-                
-        print(f"✅ Successfully organized and inserted {inserted} historical messages into the AI's Brain!")
+        data = response.json()
+        print("✅ Success! You have connected.")
 
 if __name__ == "__main__":
     asyncio.run(fetch_and_store_history())
