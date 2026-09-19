@@ -53,24 +53,29 @@ async def handle_quo_webhook(request: Request, background_tasks: BackgroundTasks
     if payload.get("type") == "message.received":
         data = payload.get("data", {})
         direction = data.get("direction")
-        
-        if direction != "incoming":
-            sender_id = data.get("userId") 
-            if sender_id and sender_id != "ai_system":
-                phone_number = data.get("to", [""])[0]
-                database.pause_ai_for_lead(phone_number)
-                print(f"🛑 Human takeover detected for {phone_number}. AI paused.")
-            return {"status": "ignored_outgoing"}
-            
-        from_number = data.get("from")
+        phone_number = data.get("to", [""])[0] if direction == "outgoing" else data.get("from")
         text = data.get("content", "")
         
-        lead = database.get_lead(from_number)
+        # ULTRA AUDIT FIX: Detect human takeover safely!
+        # If an outgoing message is sent, we check if the AI sent it by looking in our DB.
+        # If the text isn't in our DB, it means YOU typed it from the Quo app, so we PAUSE the AI!
+        if direction == "outgoing":
+            history = database.get_chat_history(phone_number, limit=5)
+            # Check if this exact message was recently logged as an assistant message
+            was_sent_by_ai = any(msg["role"] == "assistant" and msg["content"].strip() == text.strip() for msg in history)
+            
+            if not was_sent_by_ai:
+                database.pause_ai_for_lead(phone_number)
+                print(f"🛑 You manually texted {phone_number}. AI is now permanently paused for them.")
+            return {"status": "ignored_outgoing"}
+            
+        # Incoming messages
+        lead = database.get_lead(phone_number)
         if lead and lead.get("ai_paused"):
             return {"status": "ai_paused"}
             
-        database.save_message(from_number, "user", text)
-        background_tasks.add_task(process_incoming_message, from_number, text)
+        database.save_message(phone_number, "user", text)
+        background_tasks.add_task(process_incoming_message, phone_number, text)
         return {"status": "processing_in_background"}
 
     return {"status": "unhandled_event"}
@@ -81,14 +86,13 @@ class NewLead(BaseModel):
     model_interest: str
 
 async def process_new_lead_outreach(lead: NewLead):
-    # Clean phone number to E.164 format (strip everything but digits)
     digits = re.sub(r'\D', '', lead.phone_number)
     if len(digits) == 10:
         clean_phone = f"+1{digits}"
     elif len(digits) == 11 and digits.startswith("1"):
         clean_phone = f"+{digits}"
     else:
-        clean_phone = lead.phone_number # Fallback
+        clean_phone = lead.phone_number
         
     print(f"🚀 Processing new lead outreach for {clean_phone}")
     
@@ -102,6 +106,7 @@ async def process_new_lead_outreach(lead: NewLead):
         media_url = image_match.group(1)
         ai_reply = ai_reply.replace(image_match.group(0), "").strip()
         
+    # Save to database BEFORE sending, so the webhook doesn't accidentally think a human sent it!
     database.save_message(clean_phone, "assistant", ai_reply)
     await quo.send_sms(clean_phone, ai_reply, media_url=media_url)
 
