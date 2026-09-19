@@ -3,14 +3,11 @@ import asyncio
 import httpx
 import database
 from dotenv import load_dotenv
-from datetime import datetime
 
 load_dotenv()
 
 QUO_API_KEY = os.getenv("QUO_API_KEY")
-QUO_FROM_NUMBER = os.getenv("QUO_FROM_NUMBER", "+19548204220")
 
-# Stop backfilling when we hit messages older than this date
 STOP_DATE_STR = "2026-03-01T00:00:00Z"
 
 async def fetch_and_store_history():
@@ -18,8 +15,9 @@ async def fetch_and_store_history():
     database.init_db()
     
     url = "https://api.openphone.com/v1/messages"
+    # Using the standard OpenPhone Auth header
     headers = {
-        "Authorization": f"Bearer {QUO_API_KEY}",
+        "Authorization": f"{QUO_API_KEY}",
         "Content-Type": "application/json"
     }
     
@@ -30,7 +28,7 @@ async def fetch_and_store_history():
     
     async with httpx.AsyncClient() as client:
         while not reached_march:
-            query = "?limit=100"
+            query = "?maxResults=100"
             if page_token:
                 query += f"&pageToken={page_token}"
                 
@@ -40,8 +38,15 @@ async def fetch_and_store_history():
                 response.raise_for_status()
                 data = response.json()
             except Exception as e:
-                print(f"❌ Error fetching from Quo API: {e}")
-                break
+                # If Authorization without Bearer fails, fallback to Bearer
+                if getattr(e, "response", None) and e.response.status_code == 401:
+                    headers["Authorization"] = f"Bearer {QUO_API_KEY}"
+                    response = await client.get(f"{url}{query}", headers=headers, timeout=30.0)
+                    response.raise_for_status()
+                    data = response.json()
+                else:
+                    print(f"❌ Error fetching from Quo API: {e}")
+                    break
                 
             messages = data.get("data", [])
             if not messages:
@@ -49,7 +54,6 @@ async def fetch_and_store_history():
                 
             for msg in messages:
                 created_at = msg.get("createdAt")
-                # If we've hit a message older than March, stop paginating
                 if created_at and created_at < STOP_DATE_STR:
                     reached_march = True
                     break
@@ -59,13 +63,11 @@ async def fetch_and_store_history():
             total_fetched += len(messages)
             page_token = data.get("nextPageToken")
             
-            # If no more pages or we hit March, we are done downloading
             if not page_token:
                 break
                 
         print(f"📦 Total messages downloaded since March: {len(all_messages_to_insert)}")
         
-        # Quo returns newest first. We reverse it so oldest goes into the DB first.
         all_messages_to_insert.reverse()
         
         inserted = 0
