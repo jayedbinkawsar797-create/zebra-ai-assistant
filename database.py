@@ -1,7 +1,6 @@
 import os
 import psycopg2
 from psycopg2.extras import RealDictCursor
-from datetime import datetime
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 
@@ -13,11 +12,9 @@ def get_connection():
 def init_db():
     conn = get_connection()
     if not conn:
-        print("Warning: DATABASE_URL not set, skipping DB init")
         return
     try:
         with conn.cursor() as cur:
-            # Create messages table for context tracking
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS zebra_messages (
                     id SERIAL PRIMARY KEY,
@@ -27,21 +24,18 @@ def init_db():
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
             """)
-            # Create leads table if it doesn't exist
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS zebra_leads (
                     id SERIAL PRIMARY KEY,
                     phone_number VARCHAR(50) UNIQUE,
                     first_name VARCHAR(100),
                     ai_paused BOOLEAN DEFAULT FALSE,
+                    followup_count INTEGER DEFAULT 0,
                     model_interest VARCHAR(100),
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
             """)
             conn.commit()
-            print("✅ Database tables (zebra_messages, zebra_leads) initialized.")
-    except Exception as e:
-        print(f"❌ DB Init error: {e}")
     finally:
         conn.close()
 
@@ -70,6 +64,12 @@ def save_message(phone_number, role, content):
                 INSERT INTO zebra_messages (phone_number, role, content) 
                 VALUES (%s, %s, %s)
             """, (phone_number, role, content))
+            
+            cur.execute("""
+                INSERT INTO zebra_leads (phone_number) 
+                VALUES (%s) 
+                ON CONFLICT (phone_number) DO NOTHING;
+            """, (phone_number,))
             conn.commit()
     finally:
         conn.close()
@@ -91,12 +91,36 @@ def pause_ai_for_lead(phone_number):
         return
     try:
         with conn.cursor() as cur:
+            cur.execute("UPDATE zebra_leads SET ai_paused = TRUE WHERE phone_number = %s;", (phone_number,))
+            conn.commit()
+    finally:
+        conn.close()
+
+def get_leads_needing_followup():
+    conn = get_connection()
+    if not conn:
+        return []
+    try:
+        with conn.cursor() as cur:
             cur.execute("""
-                INSERT INTO zebra_leads (phone_number, ai_paused) 
-                VALUES (%s, TRUE)
-                ON CONFLICT (phone_number) 
-                DO UPDATE SET ai_paused = TRUE;
-            """, (phone_number,))
+                SELECT m.phone_number 
+                FROM zebra_messages m
+                JOIN zebra_leads l ON l.phone_number = m.phone_number
+                WHERE l.ai_paused = FALSE AND l.followup_count < 2
+                GROUP BY m.phone_number, l.followup_count
+                HAVING MAX(m.created_at) < NOW() - INTERVAL '24 hours'
+            """)
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+def increment_followup(phone_number):
+    conn = get_connection()
+    if not conn:
+        return
+    try:
+        with conn.cursor() as cur:
+            cur.execute("UPDATE zebra_leads SET followup_count = followup_count + 1 WHERE phone_number = %s", (phone_number,))
             conn.commit()
     finally:
         conn.close()
