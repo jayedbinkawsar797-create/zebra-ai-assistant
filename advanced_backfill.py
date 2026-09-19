@@ -20,36 +20,43 @@ async def get_phone_number_id(client, headers):
     for number in data:
         if number.get("number") == QUO_FROM_NUMBER:
             return number.get("id")
-    # Fallback to the first one if exact match fails
     if data:
         return data[0].get("id")
     return None
 
-async def get_all_contacts(client, headers):
-    print("👥 Downloading list of all your customers...")
-    contacts = []
+async def get_all_conversations(client, headers):
+    print("👥 Scanning all your past conversations...")
+    customer_numbers = set()
     page_token = None
+    
     while True:
-        url = "https://api.openphone.com/v1/contacts?maxResults=100"
+        url = "https://api.openphone.com/v1/conversations?maxResults=100"
         if page_token:
             url += f"&pageToken={page_token}"
+            
         resp = await client.get(url, headers=headers)
         if resp.status_code != 200:
+            print(f"Failed to get conversations: {resp.text}")
             break
+            
         data = resp.json()
-        for c in data.get("data", []):
-            phones = c.get("phoneNumbers", [])
-            for p in phones:
-                contacts.append(p.get("number"))
+        conversations = data.get("data", [])
+        
+        for conv in conversations:
+            participants = conv.get("participants", [])
+            for p in participants:
+                # Add any participant that isn't your own number
+                if p != QUO_FROM_NUMBER and p.startswith("+"):
+                    customer_numbers.add(p)
+                    
         page_token = data.get("nextPageToken")
         if not page_token:
             break
-    # Remove duplicates
-    return list(set(contacts))
+            
+    return list(customer_numbers)
 
 async def fetch_messages_for_contact(client, headers, phone_id, contact_number):
     url = "https://api.openphone.com/v1/messages"
-    # The API expects participants as a JSON array string in the query parameter
     participants_str = json.dumps([contact_number])
     query = f"?maxResults=100&phoneNumberId={phone_id}&participants={participants_str}"
     
@@ -66,18 +73,15 @@ async def run_advanced_backfill():
     }
     
     async with httpx.AsyncClient(timeout=60.0) as client:
-        # 1. Get Phone ID
         phone_id = await get_phone_number_id(client, headers)
         if not phone_id:
             print("❌ Could not find the Inbox ID.")
             return
         print(f"✅ Found Inbox ID: {phone_id}")
         
-        # 2. Get Contacts
-        contacts = await get_all_contacts(client, headers)
+        contacts = await get_all_conversations(client, headers)
         print(f"✅ Found {len(contacts)} unique customer phone numbers.")
         
-        # 3. Loop through every contact and fetch their history
         total_inserted = 0
         for i, contact_number in enumerate(contacts):
             print(f"📥 Fetching history for customer {i+1}/{len(contacts)}: {contact_number}")
@@ -86,7 +90,7 @@ async def run_advanced_backfill():
             if not messages:
                 continue
                 
-            messages.reverse() # Oldest first
+            messages.reverse()
             
             for msg in messages:
                 content = msg.get("content", "")
@@ -97,7 +101,6 @@ async def run_advanced_backfill():
                 database.save_message(contact_number, role, content)
                 total_inserted += 1
                 
-            # Sleep slightly to avoid hitting Quo rate limits
             await asyncio.sleep(0.5)
             
         print(f"🎉 SUCCESS! Completely rebuilt database with {total_inserted} historical messages.")
