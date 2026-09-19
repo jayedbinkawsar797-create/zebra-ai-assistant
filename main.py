@@ -3,6 +3,7 @@ import re
 import uvicorn
 import asyncio
 from fastapi import FastAPI, Request, BackgroundTasks
+from pydantic import BaseModel
 from dotenv import load_dotenv
 
 import database
@@ -20,10 +21,8 @@ async def startup_event():
     asyncio.create_task(scheduler.start_scheduler())
 
 async def process_incoming_message(from_number: str, text: str):
-    # 1. Ask AI for reply
     ai_reply = await agent.generate_reply(from_number, text)
     
-    # 2. Handle Stop/Handoff
     if "[STOP]" in ai_reply:
         database.pause_ai_for_lead(from_number)
         return
@@ -35,19 +34,15 @@ async def process_incoming_message(from_number: str, text: str):
         await quo.send_sms(from_number, handoff_msg)
         return
 
-    # 3. Extract Image Tag if present
     media_url = None
     image_match = re.search(r"\[IMAGE:\s*(https?://[^\s\]]+)\]", ai_reply)
     if image_match:
         media_url = image_match.group(1)
         ai_reply = ai_reply.replace(image_match.group(0), "").strip()
         
-    # 4. Human Typing Delay
-    # Calculates a delay based on message length (e.g., 20 chars per second), min 4s, max 12s
     typing_delay = min(12, max(4, len(ai_reply) / 20))
     await asyncio.sleep(typing_delay)
     
-    # 5. Save and send
     database.save_message(from_number, "assistant", ai_reply)
     await quo.send_sms(from_number, ai_reply, media_url=media_url)
 
@@ -74,14 +69,46 @@ async def handle_quo_webhook(request: Request, background_tasks: BackgroundTasks
         if lead and lead.get("ai_paused"):
             return {"status": "ai_paused"}
             
-        # Save user message immediately so it's in the DB
         database.save_message(from_number, "user", text)
-        
-        # Send processing to background task so Quo gets a 200 OK instantly and doesn't timeout!
         background_tasks.add_task(process_incoming_message, from_number, text)
         return {"status": "processing_in_background"}
 
     return {"status": "unhandled_event"}
+
+class NewLead(BaseModel):
+    first_name: str
+    phone_number: str
+    model_interest: str
+
+async def process_new_lead_outreach(lead: NewLead):
+    # Clean phone number to E.164 format (strip everything but digits)
+    digits = re.sub(r'\D', '', lead.phone_number)
+    if len(digits) == 10:
+        clean_phone = f"+1{digits}"
+    elif len(digits) == 11 and digits.startswith("1"):
+        clean_phone = f"+{digits}"
+    else:
+        clean_phone = lead.phone_number # Fallback
+        
+    print(f"🚀 Processing new lead outreach for {clean_phone}")
+    
+    prompt = f"A new customer named {lead.first_name} just submitted a form on our website looking for pricing on the {lead.model_interest}. Write a highly friendly, 1-2 sentence opening SMS introducing yourself as Alex from Zebra Golf Cart and asking if they have any specific questions about it."
+    
+    ai_reply = await agent.generate_reply(clean_phone, prompt)
+    
+    media_url = None
+    image_match = re.search(r"\[IMAGE:\s*(https?://[^\s\]]+)\]", ai_reply)
+    if image_match:
+        media_url = image_match.group(1)
+        ai_reply = ai_reply.replace(image_match.group(0), "").strip()
+        
+    database.save_message(clean_phone, "assistant", ai_reply)
+    await quo.send_sms(clean_phone, ai_reply, media_url=media_url)
+
+@app.post("/api/new-lead")
+async def handle_new_lead(lead: NewLead, background_tasks: BackgroundTasks):
+    background_tasks.add_task(process_new_lead_outreach, lead)
+    return {"status": "outreach_started"}
 
 @app.get("/health")
 def health():
