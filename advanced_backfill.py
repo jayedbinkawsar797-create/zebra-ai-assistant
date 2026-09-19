@@ -9,7 +9,6 @@ load_dotenv()
 QUO_API_KEY = os.getenv("QUO_API_KEY")
 QUO_FROM_NUMBER = os.getenv("QUO_FROM_NUMBER", "+19548204220")
 
-# Stop date for full script
 STOP_DATE_STR = "2026-03-01T00:00:00Z"
 
 async def get_phone_number_id(client, headers):
@@ -24,7 +23,6 @@ async def get_phone_number_id(client, headers):
             return number.get("id")
             
     if data:
-        print(f"WARNING: Did not find exact match for {QUO_FROM_NUMBER}. Using first inbox.")
         return data[0].get("id")
     return None
 
@@ -46,12 +44,12 @@ async def get_all_conversations(client, headers):
         page_token = data.get("nextPageToken")
         if not page_token:
             break
+        # Sleep to avoid rate limit during discovery
+        await asyncio.sleep(1)
     return list(customer_numbers)
 
 async def fetch_messages_for_contact(client, headers, phone_id, contact_number):
     url = "https://api.openphone.com/v1/messages"
-    
-    # Httpx handles array serialization cleanly when passed as a list
     params = {
         "phoneNumberId": phone_id,
         "maxResults": 100,
@@ -66,6 +64,13 @@ async def fetch_messages_for_contact(client, headers, phone_id, contact_number):
             params["pageToken"] = page_token
             
         resp = await client.get(url, headers=headers, params=params)
+        
+        # Handle Rate Limit
+        if resp.status_code == 429:
+            print(f"⚠️ Rate limited! Sleeping for 5 seconds...")
+            await asyncio.sleep(5)
+            continue
+            
         if resp.status_code == 200:
             data = resp.json()
             messages = data.get("data", [])
@@ -82,7 +87,7 @@ async def fetch_messages_for_contact(client, headers, phone_id, contact_number):
             if not page_token:
                 break
         else:
-            print(f"❌ API Error for {contact_number}: {resp.status_code} - {resp.text}")
+            print(f"❌ API Error for {contact_number}: {resp.status_code}")
             break
             
     return all_msgs
@@ -109,6 +114,8 @@ async def run_advanced_backfill():
             messages = await fetch_messages_for_contact(client, headers, phone_id, contact_number)
             
             if not messages:
+                # Sleep heavily after every fetch to avoid ban
+                await asyncio.sleep(2)
                 continue
                 
             messages.reverse()
@@ -119,6 +126,9 @@ async def run_advanced_backfill():
                 role = "user" if direction == "incoming" else "assistant"
                 database.save_message(contact_number, role, content)
                 total_inserted += 1
+                
+            # Sleep to respect OpenPhone's strict rate limits
+            await asyncio.sleep(2)
                 
         print(f"🎉 SUCCESS! Rebuilt database with {total_inserted} historical messages.")
 
