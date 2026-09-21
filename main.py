@@ -80,49 +80,6 @@ async def handle_quo_webhook(request: Request, background_tasks: BackgroundTasks
 
     return {"status": "unhandled_event"}
 
-
-from fastapi import Form
-from fastapi.responses import RedirectResponse
-
-@app.post("/api/new-lead-form")
-async def handle_new_lead_form(
-    background_tasks: BackgroundTasks,
-    first_name: str = Form(None, alias="first_name"),
-    last_name: str = Form(None, alias="last_name"),
-    phone_number: str = Form(None, alias="phone_number"),
-    First_name: str = Form(None, alias="First name"),
-    Phone: str = Form(None, alias="Phone"),
-    Model_interest: str = Form(None, alias="Model interest"),
-    model_interest: str = Form(None, alias="model_interest")
-):
-    # Extract whichever name they used in the HTML
-    final_first = first_name or First_name or "there"
-    final_phone = phone_number or Phone or ""
-    final_model = model_interest or Model_interest or "Zebra Golf Cart"
-    
-    if final_phone:
-        lead = NewLead(first_name=final_first, phone_number=final_phone, model_interest=final_model)
-        
-        # Save to database so we know about them!
-        try:
-            conn = database.get_connection()
-            if conn:
-                with conn.cursor() as cur:
-                    cur.execute("""
-                        INSERT INTO zebra_leads (first_name, phone_number, model_interest) 
-                        VALUES (%s, %s, %s)
-                        ON CONFLICT (phone_number) 
-                        DO UPDATE SET first_name = EXCLUDED.first_name, model_interest = EXCLUDED.model_interest;
-                    """, (final_first, final_phone, final_model))
-                conn.commit()
-                conn.close()
-        except Exception as e:
-            print(f"Error saving lead to db: {e}")
-            
-        background_tasks.add_task(process_new_lead_outreach, lead)
-        
-    return RedirectResponse(url="https://cart.zebragolfcart.com/thank-you.html", status_code=303)
-
 class NewLead(BaseModel):
     first_name: str
     phone_number: str
