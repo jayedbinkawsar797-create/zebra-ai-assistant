@@ -3,7 +3,8 @@ import json
 from openai import AsyncOpenAI
 import database
 
-client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+api_key = os.getenv("OPENAI_API_KEY")
+client = AsyncOpenAI(api_key=api_key) if api_key else None
 
 with open("knowledge.json", "r") as f:
     ZEBRA_KNOWLEDGE = f.read()
@@ -41,6 +42,10 @@ async def generate_reply(phone_number: str, new_message: str):
     if new_message.strip().upper() in ["STOP", "UNSUBSCRIBE", "CANCEL"]:
         return "[STOP]"
     
+    if not client:
+        print("WARNING: OPENAI_API_KEY is not set.")
+        return "Hi! This is Alex from Zebra Golf Cart. We received your request and will reach out shortly. Let me know if you have any questions!"
+        
     history_records = database.get_chat_history(phone_number, limit=15)
     
     messages = [{"role": "system", "content": SYSTEM_PROMPT}]
